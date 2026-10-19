@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "amazon-text-recsys"
+version = "0.1.0"
+description = "Time-aware text-enhanced recommendation on Amazon Reviews 2023"
+requires-python = ">=3.10"
+dependencies = [
+  "numpy>=1.24",
+  "pandas>=2.0",
+  "pyarrow>=14",
+  "torch>=2.2",
+  "sentence-transformers>=3.0",
+  "faiss-cpu>=1.8",
+  "lightgbm>=4.0",
+  "requests>=2.31",
+  "truststore>=0.9",
+  "fastapi>=0.110",
+  "uvicorn>=0.27",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+
+[project.scripts]
+amazon-recsys = "amazon_recsys.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
