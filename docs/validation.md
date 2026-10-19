@@ -21,9 +21,16 @@ Full test cohort (`--max-queries 0`):
 | Two-Tower, FlatIP | 0.05519 | 0.00907 | 0.00403 |
 | 50/50 hybrid, FlatIP | 0.07323 | 0.01648 | 0.00846 |
 | 50/50 hybrid, HNSW | 0.07271 | 0.01639 | 0.00837 |
+| GRU sequence hybrid, HNSW | 0.07681 | 0.01726 | 0.00910 |
 | Hybrid + LambdaRank, HNSW | 0.07271 | 0.02258 | 0.01132 |
 
-The ranker was fitted on validation candidates: 403 first-half and 369 second-half queries had a positive item inside the retrieved 100. Other validation queries cannot train a candidate reranker because the target was not retrieved. On test, reranking changed Recall@10 from 0.01660 to 0.03529 for zero-training-positive targets, but from 0.02024 to 0.00184 for 1–4 and from 0.01508 to 0.00910 for 5+ targets. The overall gain hides this subgroup regression.
+The GRU encoder uses the last 20 positive item text vectors in order, with the same 200,000 seeded train examples, three epochs, batch 256 and contrastive objective as the mean-history tower. Its epoch losses were 4.7028, 4.4946 and 4.4011. On all 12,167 validation queries, frozen text, mean-history hybrid and GRU hybrid achieved Recall@100 of 0.06435, 0.07685 and 0.08375 respectively, using FlatIP and content weight 0.5. GRU hybrid weights 0.25 and 0.75 achieved 0.08161 and 0.07882. Thus 0.5 was selected on validation Recall@100, before evaluating the GRU model on test.
+
+Paired HNSW hit counts for mean-history versus GRU hybrid were 937 versus 1,022 at Recall@100 on validation (273 queries gained, 188 lost; exact two-sided sign/McNemar p=0.000088) and 834 versus 885 on test (225 gained, 174 lost; p=0.0122). At Recall@10 the test counts were 187 versus 198 (66 gained, 55 lost; p=0.363). These tests treat user queries as independent and do not account for shared items or our prior inspection of the test set. The test comparison is therefore exploratory, and the top-10 gain is not statistically convincing.
+
+The ranker was fitted on mean-history hybrid validation candidates: 403 first-half and 369 second-half queries had a positive item inside the retrieved 100. Other validation queries cannot train a candidate reranker because the target was not retrieved. On test, reranking changed Recall@10 from 0.01660 to 0.03529 for zero-training-positive targets, but from 0.02024 to 0.00184 for 1–4 and from 0.01508 to 0.00910 for 5+ targets. The overall gain hides this subgroup regression. Its five feature gains are dominated by training-set item popularity, which has a shifting target distribution: zero-training-positive targets were 21.7% of its early-validation training window but 54.1% of test queries. This is a plausible contributor to subgroup instability, not proof of the sole cause. The existing ranker has not been fitted to GRU candidates.
+
+For scale, the median eligible catalog at test is 24,868 items (range 24,050–25,611). A uniformly random ordering would achieve expected Recall@100=0.00403 and Recall@10=0.000403 for this single-target protocol. This is a reference calculation, not a trained recommendation baseline.
 
 ## Index quality
 

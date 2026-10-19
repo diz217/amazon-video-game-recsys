@@ -13,10 +13,14 @@ flowchart LR
     E --> F[Frozen BGE text encoder]
     F --> G[Item text vectors]
     D --> H[Mean history text vector]
+    D --> Q[GRU history encoder<br/>sequence ablation]
     G --> I[Trainable item tower]
+    G --> R[GRU experiment<br/>item projection]
     H --> J[Trainable user tower]
     I --> K[FAISS candidate retrieval]
     J --> K
+    Q --> K
+    R --> K
     K --> L[LightGBM ranker<br/>score + text similarity + train popularity]
     L --> M[Top-K recommendations]
     M --> P[Local FastAPI endpoint]
@@ -40,6 +44,7 @@ Product `average_rating` and `rating_number` are excluded because they aggregate
 | Frozen BGE text cosine | Test whether item text alone helps |
 | Two-Tower on frozen BGE vectors | Learn separate user-history and item projections using in-batch contrastive loss |
 | 50/50 text + Two-Tower hybrid | Preserve content matching while adding learned behavioral signal |
+| GRU sequence tower + frozen text hybrid | Test whether the order of positive history improves candidate retrieval |
 | FAISS FlatIP and HNSW | Compare exact retrieval with approximate search |
 | LightGBM LambdaRank | Reorder the retrieved 100 candidates using only training-time popularity and current request features |
 
@@ -56,9 +61,12 @@ These measurements use all **11,470** eligible test users and one future positiv
 | Frozen text cosine, FlatIP | 6.57% | 1.42% | 0.75% |
 | Learned Two-Tower, FlatIP | 5.52% | 0.91% | 0.40% |
 | Hybrid, HNSW | 7.27% | 1.64% | 0.84% |
+| GRU sequence hybrid, HNSW | 7.68% | 1.73% | 0.91% |
 | Hybrid + LambdaRank, HNSW | 7.27% | 2.26% | 1.13% |
 
-The Two-Tower alone underperformed frozen text matching. The hybrid improved candidate recall, and reranking improved overall top-10 quality. Reranking helped items with zero positive training events but reduced top-10 recall in the 1–4 and 5+ training-event buckets. This limits any claim that the ranker is uniformly better. The overall metrics are low because the target is one future review among a large catalog and many test targets have no positive training interactions. These are offline proxy results, not online user-impact measurements.
+The Two-Tower alone underperformed frozen text matching. The GRU hybrid improved candidate Recall@100 by 0.41 percentage points over the mean-history hybrid on test; its 0.09-point Recall@10 gain was not compelling in a paired query comparison. The ranker shown here is fitted to the mean-history hybrid, **not** the GRU candidates, so these rows do not describe a combined GRU + ranker pipeline. Reranking helped items with zero positive training events but reduced top-10 recall in the 1–4 and 5+ training-event buckets. The current ranker is a five-feature LightGBM tree ensemble fitted from only 403 early-validation queries with a retrieved positive; it is an exploratory baseline, not a robust final ranker.
+
+The median eligible catalog has 24,868 items. Uniformly random ranking would reach about 0.40% Recall@100 and 0.040% Recall@10 under this one-target protocol; popularity reaches 1.99% and 0.58%. This makes 7.68% meaningfully above trivial baselines but still leaves most next-positive items outside the 100 candidates. The results are offline proxy measurements, not online user-impact measurements. Because we inspected test results before adding the GRU model, its test comparison is exploratory; the full validation result and protocol are in the [validation notes](docs/validation.md).
 
 ## Reproduce
 
@@ -71,11 +79,13 @@ python -m venv .venv
 .venv/Scripts/amazon-recsys prepare
 .venv/Scripts/amazon-recsys encode
 .venv/Scripts/amazon-recsys train-towers
+.venv/Scripts/amazon-recsys train-sequence
 .venv/Scripts/amazon-recsys train-itemcf
 .venv/Scripts/amazon-recsys evaluate --split valid --mode popular
 .venv/Scripts/amazon-recsys evaluate --split valid --mode itemcf
 .venv/Scripts/amazon-recsys evaluate --split valid --mode content
 .venv/Scripts/amazon-recsys evaluate --split valid --mode tower
+.venv/Scripts/amazon-recsys evaluate --split valid --mode sequence_hybrid --index flat --alpha 0.5 --max-queries 0
 .venv/Scripts/amazon-recsys train-ranker
 .venv/Scripts/amazon-recsys benchmark-index
 .venv/Scripts/amazon-recsys evaluate --split test --mode hybrid --index hnsw --alpha 0.5 --max-queries 0 --ranker

@@ -50,11 +50,18 @@ def _candidates(workspace: Path, mode: str, method: str, items: pd.DataFrame,
             item_vectors = text_vectors
             queries = history_mean(text_vectors, examples)
             queries /= np.maximum(np.linalg.norm(queries, axis=1, keepdims=True), 1e-12)
-        elif mode in {"tower", "hybrid"}:
-            model = load_towers(workspace / "artifacts" / "two_tower.pt")
-            item_vectors = transform_items(model, text_vectors)
-            queries = transform_users(model, text_vectors, examples)
-            if mode == "hybrid":
+        elif mode in {"tower", "hybrid", "sequence", "sequence_hybrid"}:
+            if mode.startswith("sequence"):
+                from .sequence import load_sequence, transform_items as sequence_items
+                from .sequence import transform_users as sequence_users
+                model = load_sequence(workspace / "artifacts" / "sequence_tower.pt")
+                item_vectors = sequence_items(model, text_vectors)
+                queries = sequence_users(model, text_vectors, examples)
+            else:
+                model = load_towers(workspace / "artifacts" / "two_tower.pt")
+                item_vectors = transform_items(model, text_vectors)
+                queries = transform_users(model, text_vectors, examples)
+            if mode in {"hybrid", "sequence_hybrid"}:
                 if not 0 <= alpha <= 1:
                     raise ValueError("alpha must be between zero and one")
                 content_queries = history_mean(text_vectors, examples)
@@ -84,10 +91,14 @@ def main() -> None:
     train = sub.add_parser("train-towers")
     train.add_argument("--epochs", type=int, default=3)
     train.add_argument("--max-examples", type=int, default=200_000)
+    sequence = sub.add_parser("train-sequence")
+    sequence.add_argument("--epochs", type=int, default=3)
+    sequence.add_argument("--max-examples", type=int, default=200_000)
     sub.add_parser("train-itemcf")
     evaluate = sub.add_parser("evaluate")
     evaluate.add_argument("--split", choices=["valid", "test"], default="valid")
-    evaluate.add_argument("--mode", choices=["popular", "itemcf", "content", "tower", "hybrid"], default="hybrid")
+    evaluate.add_argument("--mode", choices=["popular", "itemcf", "content", "tower", "hybrid",
+                                             "sequence", "sequence_hybrid"], default="hybrid")
     evaluate.add_argument("--index", choices=["flat", "hnsw"], default="hnsw")
     evaluate.add_argument("--max-queries", type=int, default=5000)
     evaluate.add_argument("--ranker", action="store_true")
@@ -116,6 +127,11 @@ def main() -> None:
         _, examples, vectors = _load(workspace)
         result = train_towers(vectors, examples["train"], workspace / "artifacts",
                               epochs=args.epochs, max_examples=args.max_examples)
+    elif args.command == "train-sequence":
+        from .sequence import train_sequence
+        _, examples, vectors = _load(workspace)
+        result = train_sequence(vectors, examples["train"], workspace / "artifacts",
+                                epochs=args.epochs, max_examples=args.max_examples)
     elif args.command == "train-itemcf":
         from .collab import train_itemcf
         events = pd.read_parquet(workspace / "data" / "processed" / "events.parquet")
@@ -171,7 +187,7 @@ def main() -> None:
                                          alpha=args.alpha)
             retrieval_report = metrics(selected, candidates)
             result = {"split": args.split, "mode": args.mode, "index": args.index,
-                      "alpha": args.alpha if args.mode == "hybrid" else None,
+                      "alpha": args.alpha if args.mode in {"hybrid", "sequence_hybrid"} else None,
                       "max_queries": args.max_queries, "retrieval": retrieval_report,
                       "target_train_popularity": metrics_by_train_popularity(
                           selected, candidates, items.train_positive_count.to_numpy()),
@@ -184,7 +200,7 @@ def main() -> None:
                 result["reranked"] = metrics(selected, reranked)
                 result["reranked_target_train_popularity"] = metrics_by_train_popularity(
                     selected, reranked, items.train_positive_count.to_numpy())
-            suffix = f"_{args.alpha}" if args.mode == "hybrid" else ""
+            suffix = f"_{args.alpha}" if args.mode in {"hybrid", "sequence_hybrid"} else ""
             output = workspace / "artifacts" / f"eval_{args.split}_{args.mode}_{args.index}{suffix}.json"
             output.parent.mkdir(parents=True, exist_ok=True)
             output.write_text(json.dumps(result, indent=2), encoding="utf-8")
