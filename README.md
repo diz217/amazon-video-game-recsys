@@ -6,26 +6,26 @@ A reproducible two-stage recommendation experiment on the **Amazon Reviews 2023 
 
 ```mermaid
 flowchart LR
-    A[Amazon Reviews 2023<br/>ratings + product metadata] --> B[Clean and join on parent_asin]
-    B --> C[Global time split<br/>train / validation / test]
-    C --> D[Past positive items<br/>user history]
-    B --> E[Title + description + features]
-    E --> F[Frozen BGE text encoder]
-    F --> G[Item text vectors]
-    D --> H[Mean history text vector]
-    D --> Q[GRU history encoder<br/>sequence ablation]
-    G --> I[Trainable item tower]
-    G --> R[GRU experiment<br/>item projection]
-    H --> J[Trainable user tower]
-    I --> K[FAISS candidate retrieval]
+    A["Amazon Reviews 2023<br/>ratings + product metadata"] --> B["Clean and join on parent_asin"]
+    B --> C["Global time split<br/>train / validation / test"]
+    C --> D["Past positive items<br/>user history"]
+    B --> E["Title + description + features"]
+    E --> F["Frozen BGE text encoder"]
+    F --> G["Item text vectors"]
+    D --> H["Mean history text vector"]
+    D --> Q["GRU history encoder<br/>sequence ablation"]
+    G --> I["Trainable item tower"]
+    G --> R["GRU experiment<br/>item projection"]
+    H --> J["Trainable user tower"]
+    I --> K["FAISS candidate retrieval"]
     J --> K
     Q --> K
     R --> K
-    K --> L[LightGBM ranker<br/>score + text similarity + train popularity]
-    L --> M[Top-K recommendations]
-    M --> P[Local FastAPI endpoint]
-    C --> N[Held-out next positive review]
-    M --> O[Recall@100 / NDCG@10<br/>sparse-item slices / latency]
+    K --> L["LightGBM ranker<br/>score + text similarity + train popularity"]
+    L --> M["Top-K recommendations"]
+    M --> P["Local FastAPI endpoint"]
+    C --> N["Held-out next positive review"]
+    M --> O["Recall@100 / NDCG@10<br/>sparse-item slices / latency"]
     N --> O
 ```
 
